@@ -29,7 +29,7 @@ class StarlingBankEvent(EventEntity):
     _attr_has_entity_name = True
     _attr_event_types = EVENT_TYPES
     _attr_entity_description = EventEntityDescription(
-        key="feed_item_received", name="Feed item received", icon="mdi:receipt-text-arrow-right"
+        key="feed_item_received", name="Latest bank event", icon="mdi:receipt-text-arrow-right"
     )
 
     def __init__(self, entry_id: str, data: ReceiverData) -> None:

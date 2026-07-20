@@ -31,8 +31,12 @@ type StarlingConfigEntry = ConfigEntry[ReceiverData]
 async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> bool:
     """Set up an entry and its unauthenticated secret callback route."""
     data = ReceiverData(
-        entry.data[CONF_WEBHOOK_SECRET], entry.options.get(CONF_WEBHOOK_PUBLIC_KEY)
+        hass,
+        entry.entry_id,
+        entry.data[CONF_WEBHOOK_SECRET],
+        entry.options.get(CONF_WEBHOOK_PUBLIC_KEY),
     )
+    await data.async_restore()
     entry.runtime_data = data
     runtime = hass.data.setdefault(DOMAIN, {})
     runtime[entry.entry_id] = data

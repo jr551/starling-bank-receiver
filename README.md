@@ -10,7 +10,7 @@ This integration deliberately does not ask for a Starling access token. It recei
 
 ## What it creates
 
-- `sensor.starling_bank_feed` — timestamp of the latest receipt plus a concise, normalised latest-item summary.
+- `sensor.starling_bank_feed` — a GBP dashboard summary such as `💳 • £12.34 • Card payment • Example shop`, with a matching Home Assistant icon. Its attributes keep the full unmodified Starling callback under `latest.raw_payload`, alongside the normalised fields used in automations.
 - `event.starling_bank_feed_item_received` — a Home Assistant event entity for the latest received webhook.
 - `starling_bank_receiver.webhook_received` — Home Assistant event bus event for every accepted callback.
 - `starling_bank_receiver.feed_item_received` — emitted for `FEED_ITEM` callbacks.
@@ -24,6 +24,10 @@ The integration keeps a small in-memory deduplication window keyed by Starling's
 3. Add **Starling Bank Receiver** from **Settings → Devices & services → Add integration**.
 4. Copy the **Payload URL** shown on `sensor.starling_bank_feed` and paste it into Starling Developer Portal's *Payload URL* field.
 5. In Starling, choose **Show public key** for that webhook. Open the integration's **Configure** menu in Home Assistant and paste the complete PEM key. The receiver verifies Starling's raw-payload `X-Hook-Signature` using SHA512withRSA and rejects unsigned callbacks.
+
+## Data retention
+
+The integration persists the latest 250 accepted callbacks using Home Assistant's integration storage. Each saved item contains the complete callback payload plus the friendly GBP summary fields, and is restored after a Home Assistant restart. This is intentionally local to Home Assistant; do not expose the entity's attributes in a public dashboard.
 
 ### Important: paste the base URL
 

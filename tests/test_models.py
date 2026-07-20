@@ -1,8 +1,17 @@
-"""Tests for payload normalisation."""
+"""Tests for payload normalisation without requiring Home Assistant."""
 
+import importlib.util
+from pathlib import Path
+import sys
 import unittest
 
-from custom_components.starling_bank_receiver.models import parse_payload
+_models_path = Path(__file__).parents[1] / "custom_components/starling_bank_receiver/models.py"
+_spec = importlib.util.spec_from_file_location("starling_models", _models_path)
+assert _spec and _spec.loader
+_models = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _models
+_spec.loader.exec_module(_models)
+parse_payload = _models.parse_payload
 
 
 class ParsePayloadTests(unittest.TestCase):
@@ -25,6 +34,23 @@ class ParsePayloadTests(unittest.TestCase):
         self.assertEqual(item.amount, 1234)
         self.assertEqual(item.currency, "GBP")
         self.assertEqual(item.card_last4, "1234")
+        self.assertEqual(item.summary, "💳 • £12.34 • Card payment")
+        self.assertEqual(item.raw_payload["content"]["amount"]["minorUnits"], 1234)
+
+    def test_gbp_transfer_summary_has_a_type_and_symbol(self) -> None:
+        item = parse_payload(
+            {
+                "webhookEventUid": "event-2",
+                "webhookType": "FEED_ITEM",
+                "content": {
+                    "amount": {"currency": "GBP", "minorUnits": 50000},
+                    "direction": "IN",
+                    "source": "FASTER_PAYMENTS_IN",
+                    "counterPartyName": "Example Ltd",
+                },
+            }
+        )
+        self.assertEqual(item.summary, "💰 • £500.00 • Bank transfer in • Example Ltd")
 
     def test_envelope_is_required(self) -> None:
         with self.assertRaises(ValueError):
