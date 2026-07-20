@@ -1,0 +1,13 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Only one Starling Bank Receiver can be configured."
+    },
+    "step": {
+      "user": {
+        "description": "Create a private, token-free receiver for Starling Bank V2 webhooks.",
+        "title": "Starling Bank Receiver"
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Starling Bank Receiver",
+  "render_readme": true,
+  "homeassistant": ">=2025.1.0"
+}

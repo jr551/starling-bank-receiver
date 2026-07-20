@@ -1,0 +1,12 @@
+{
+  "domain": "starling_bank_receiver",
+  "name": "Starling Bank Receiver",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/jr551/starling-bank-receiver",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/jr551/starling-bank-receiver/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
