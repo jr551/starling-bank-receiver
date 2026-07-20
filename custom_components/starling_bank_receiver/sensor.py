@@ -57,6 +57,8 @@ class StarlingBankFeedSensor(SensorEntity):
             "payload_url": callback_base_url(self.hass, self.data),
             "accepted_callbacks": self.data.total_received,
             "ignored_replays": self.data.total_duplicates,
+            "rejected_callbacks": self.data.total_rejected,
+            "signature_validation": "enabled" if self.data.public_key else "not_configured",
         }
         if self.data.latest:
             attributes["latest"] = self.data.latest.event_data()

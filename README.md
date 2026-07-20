@@ -23,6 +23,7 @@ The integration keeps a small in-memory deduplication window keyed by Starling's
 2. Restart Home Assistant.
 3. Add **Starling Bank Receiver** from **Settings → Devices & services → Add integration**.
 4. Copy the **Payload URL** shown on `sensor.starling_bank_feed` and paste it into Starling Developer Portal's *Payload URL* field.
+5. In Starling, choose **Show public key** for that webhook. Open the integration's **Configure** menu in Home Assistant and paste the complete PEM key. The receiver verifies Starling's raw-payload `X-Hook-Signature` using SHA512withRSA and rejects unsigned callbacks.
 
 ### Important: paste the base URL
 
@@ -66,4 +67,3 @@ python3 -m unittest discover -s tests
 ## Disclaimer
 
 This is an independent community integration, not affiliated with, endorsed by, or supported by Starling Bank.
-

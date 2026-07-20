@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from aiohttp import web
@@ -14,6 +15,7 @@ from homeassistant.helpers.network import get_url
 
 from .const import (
     CONF_WEBHOOK_SECRET,
+    CONF_WEBHOOK_PUBLIC_KEY,
     DOMAIN,
     EVENT_FEED_ITEM_RECEIVED,
     EVENT_WEBHOOK_RECEIVED,
@@ -28,7 +30,9 @@ type StarlingConfigEntry = ConfigEntry[ReceiverData]
 
 async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> bool:
     """Set up an entry and its unauthenticated secret callback route."""
-    data = ReceiverData(entry.data[CONF_WEBHOOK_SECRET])
+    data = ReceiverData(
+        entry.data[CONF_WEBHOOK_SECRET], entry.options.get(CONF_WEBHOOK_PUBLIC_KEY)
+    )
     entry.runtime_data = data
     runtime = hass.data.setdefault(DOMAIN, {})
     runtime[entry.entry_id] = data
@@ -45,6 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> 
         model="Webhook receiver",
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
 
@@ -54,6 +59,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: StarlingConfigEntry) ->
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unloaded
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: StarlingConfigEntry) -> None:
+    """Reload after a webhook public key is added or replaced."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 def callback_base_url(hass: HomeAssistant, data: ReceiverData) -> str | None:
@@ -90,10 +100,13 @@ class StarlingWebhookView(HomeAssistantView):
         if data is None or event_type not in ROUTE_TO_WEBHOOK_TYPE:
             raise web.HTTPNotFound()
         try:
-            payload: dict[str, Any] = await request.json()
+            body = await request.read()
+            payload: dict[str, Any] = json.loads(body)
             item = parse_payload(payload)
-        except (ValueError, TypeError, web.HTTPException):
+        except (json.JSONDecodeError, ValueError, TypeError):
             raise web.HTTPBadRequest(text="Expected a Starling V2 JSON webhook") from None
+        if not data.signature_is_valid(body, request.headers.get("X-Hook-Signature")):
+            raise web.HTTPUnauthorized(text="Invalid or unconfigured Starling signature")
 
         if item.webhook_type != ROUTE_TO_WEBHOOK_TYPE[event_type]:
             raise web.HTTPBadRequest(text="Callback path and webhookType do not match")

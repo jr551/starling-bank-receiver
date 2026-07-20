@@ -43,4 +43,5 @@ class StarlingBankEvent(EventEntity):
 
     def _handle_item(self, item: FeedItem) -> None:
         event_type = item.webhook_type.lower()
-        self.async_set_event_type(event_type)
+        self._trigger_event(event_type, item.event_data())
+        self.async_write_ha_state()

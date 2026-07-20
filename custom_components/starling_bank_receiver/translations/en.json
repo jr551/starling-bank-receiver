@@ -9,5 +9,19 @@
         "title": "Starling Bank Receiver"
       }
     }
+  },
+  "options": {
+    "error": {
+      "invalid_public_key": "The Starling webhook public key is not a valid PEM public key."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "webhook_public_key": "Webhook public key"
+        },
+        "description": "In Starling Developer Portal, use Show public key for this webhook and paste the complete PEM key here. The integration will reject unsigned or invalid callbacks.",
+        "title": "Verify Starling webhooks"
+      }
+    }
   }
 }
