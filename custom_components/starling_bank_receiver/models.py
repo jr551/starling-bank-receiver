@@ -38,6 +38,8 @@ class FeedItem:
     category_uid: str | None
     amount: int | None
     currency: str | None
+    source_amount: int | None
+    source_currency: str | None
     direction: str | None
     source: str | None
     source_sub_type: str | None
@@ -49,6 +51,10 @@ class FeedItem:
     transaction_time: str | None
     settlement_time: str | None
     card_last4: str | None
+    reference: str | None
+    updated_at: str | None
+    has_attachment: bool | None
+    receipt_present: bool | None
     raw_payload: dict[str, Any]
 
     def event_data(self) -> dict[str, Any]:
@@ -77,7 +83,10 @@ class FeedItem:
     def transaction_type(self) -> str:
         """Return a concise, human-readable Starling transaction type."""
         source = (self.source or "").upper()
+        source_sub_type = (self.source_sub_type or "").upper()
         webhook_type = self.webhook_type.upper()
+        if source_sub_type == "ROUND_UP":
+            return "Round up"
         if source in {"MASTER_CARD", "CARD_PAYMENT", "CARD"} or self.card_last4:
             return "Card payment"
         if source == "DIRECT_DEBIT":
@@ -106,6 +115,8 @@ class FeedItem:
     def symbol(self) -> str:
         """Return an easily-scanned symbol for the transaction."""
         source = (self.source or "").upper()
+        if (self.source_sub_type or "").upper() == "ROUND_UP":
+            return "🐷"
         if source in {"MASTER_CARD", "CARD_PAYMENT", "CARD"} or self.card_last4:
             return "💳"
         if source == "DIRECT_DEBIT":
@@ -135,6 +146,14 @@ class FeedItem:
         return f"{value:,.2f} {(self.currency or '').upper()}".strip()
 
     @property
+    def signed_amount(self) -> Decimal | None:
+        """Return the major-unit amount with outgoing payments made negative."""
+        if self.amount is None:
+            return None
+        value = Decimal(self.amount) / Decimal(100)
+        return -value if (self.direction or "").upper() == "OUT" else value
+
+    @property
     def summary(self) -> str:
         """Return the state shown in Home Assistant dashboards."""
         parts = [self.symbol, self.amount_display, self.transaction_type]
@@ -155,12 +174,19 @@ def parse_payload(payload: Mapping[str, Any]) -> FeedItem:
         content = {}
     amount = content.get("amount")
     amount = amount if isinstance(amount, Mapping) else {}
+    source_amount = content.get("sourceAmount")
+    source_amount = source_amount if isinstance(source_amount, Mapping) else {}
     card = content.get("masterCardFeedDetails")
     card = card if isinstance(card, Mapping) else {}
 
     minor_units = amount.get("minorUnits")
     if isinstance(minor_units, bool) or not isinstance(minor_units, int | float):
         minor_units = None
+    source_minor_units = source_amount.get("minorUnits")
+    if isinstance(source_minor_units, bool) or not isinstance(
+        source_minor_units, int | float
+    ):
+        source_minor_units = None
 
     return FeedItem(
         event_uid=event_uid,
@@ -171,6 +197,10 @@ def parse_payload(payload: Mapping[str, Any]) -> FeedItem:
         category_uid=_text(content.get("categoryUid")),
         amount=int(minor_units) if minor_units is not None else None,
         currency=_text(amount.get("currency")),
+        source_amount=(
+            int(source_minor_units) if source_minor_units is not None else None
+        ),
+        source_currency=_text(source_amount.get("currency")),
         direction=_text(content.get("direction")),
         source=_text(content.get("source")),
         source_sub_type=_text(content.get("sourceSubType")),
@@ -182,5 +212,17 @@ def parse_payload(payload: Mapping[str, Any]) -> FeedItem:
         transaction_time=_text(content.get("transactionTime")),
         settlement_time=_text(content.get("settlementTime")),
         card_last4=_text(card.get("cardLast4")),
+        reference=_text(content.get("reference")),
+        updated_at=_text(content.get("updatedAt")),
+        has_attachment=(
+            content.get("hasAttachment")
+            if isinstance(content.get("hasAttachment"), bool)
+            else None
+        ),
+        receipt_present=(
+            content.get("receiptPresent")
+            if isinstance(content.get("receiptPresent"), bool)
+            else None
+        ),
         raw_payload=_json_copy(payload),
     )

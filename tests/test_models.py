@@ -5,7 +5,9 @@ from pathlib import Path
 import sys
 import unittest
 
-_models_path = Path(__file__).parents[1] / "custom_components/starling_bank_receiver/models.py"
+_models_path = (
+    Path(__file__).parents[1] / "custom_components/starling_bank_receiver/models.py"
+)
 _spec = importlib.util.spec_from_file_location("starling_models", _models_path)
 assert _spec and _spec.loader
 _models = importlib.util.module_from_spec(_spec)
@@ -36,6 +38,7 @@ class ParsePayloadTests(unittest.TestCase):
         self.assertEqual(item.card_last4, "1234")
         self.assertEqual(item.summary, "💳 • £12.34 • Card payment")
         self.assertEqual(item.raw_payload["content"]["amount"]["minorUnits"], 1234)
+        self.assertEqual(item.signed_amount, _models.Decimal("-12.34"))
 
     def test_gbp_transfer_summary_has_a_type_and_symbol(self) -> None:
         item = parse_payload(
@@ -51,6 +54,39 @@ class ParsePayloadTests(unittest.TestCase):
             }
         )
         self.assertEqual(item.summary, "💰 • £500.00 • Bank transfer in • Example Ltd")
+        self.assertEqual(item.signed_amount, _models.Decimal("500"))
+
+    def test_realistic_round_up_is_classified_and_enriched(self) -> None:
+        item = parse_payload(
+            {
+                "webhookEventUid": "event-round-up",
+                "webhookType": "FEED_ITEM",
+                "eventTimestamp": "2026-07-22T14:56:01Z",
+                "content": {
+                    "feedItemUid": "item-round-up",
+                    "amount": {"currency": "GBP", "minorUnits": 66},
+                    "sourceAmount": {"currency": "GBP", "minorUnits": 66},
+                    "direction": "IN",
+                    "source": "INTERNAL_TRANSFER",
+                    "sourceSubType": "ROUND_UP",
+                    "status": "SETTLED",
+                    "counterPartyName": "Savings space",
+                    "counterPartyType": "CATEGORY",
+                    "reference": "Round up",
+                    "updatedAt": "2026-07-22T14:56:02Z",
+                    "hasAttachment": False,
+                    "receiptPresent": False,
+                },
+            }
+        )
+        self.assertEqual(item.transaction_type, "Round up")
+        self.assertEqual(item.symbol, "🐷")
+        self.assertEqual(item.summary, "🐷 • £0.66 • Round up • Savings space")
+        self.assertEqual(item.source_amount, 66)
+        self.assertEqual(item.source_currency, "GBP")
+        self.assertEqual(item.reference, "Round up")
+        self.assertFalse(item.has_attachment)
+        self.assertFalse(item.receipt_present)
 
     def test_envelope_is_required(self) -> None:
         with self.assertRaises(ValueError):

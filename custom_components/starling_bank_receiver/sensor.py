@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -22,7 +23,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Add the latest-feed sensor."""
-    async_add_entities([StarlingBankFeedSensor(hass, entry.entry_id, entry.runtime_data)])
+    async_add_entities(
+        [
+            StarlingBankFeedSensor(hass, entry.entry_id, entry.runtime_data),
+            StarlingBankAmountSensor(entry.entry_id, entry.runtime_data),
+        ]
+    )
 
 
 class StarlingBankFeedSensor(SensorEntity, RestoreEntity):
@@ -48,7 +54,9 @@ class StarlingBankFeedSensor(SensorEntity, RestoreEntity):
                     self.data.latest = FeedItem.from_event_data(latest)
                 except ValueError:
                     pass
-        self.async_on_remove(self.data.add_listener(lambda _: self.async_write_ha_state()))
+        self.async_on_remove(
+            self.data.add_listener(lambda _: self.async_write_ha_state())
+        )
         self.async_write_ha_state()
 
     @property
@@ -64,6 +72,7 @@ class StarlingBankFeedSensor(SensorEntity, RestoreEntity):
         if not item:
             return "mdi:bank-transfer"
         return {
+            "🐷": "mdi:piggy-bank",
             "💳": "mdi:credit-card",
             "🏦": "mdi:bank",
             "🔁": "mdi:repeat",
@@ -81,7 +90,9 @@ class StarlingBankFeedSensor(SensorEntity, RestoreEntity):
             "ignored_replays": self.data.total_duplicates,
             "rejected_callbacks": self.data.total_rejected,
             "stored_callbacks": len(self.data.items),
-            "signature_validation": "enabled" if self.data.public_key else "not_configured",
+            "signature_validation": "enabled"
+            if self.data.public_key
+            else "not_configured",
         }
         if self.data.latest:
             attributes["latest"] = self.data.latest.event_data()
@@ -89,3 +100,67 @@ class StarlingBankFeedSensor(SensorEntity, RestoreEntity):
             attributes["symbol"] = self.data.latest.symbol
             attributes["amount_gbp"] = self.data.latest.amount_display
         return attributes
+
+
+class StarlingBankAmountSensor(SensorEntity):
+    """Expose the latest amount as a signed numeric value for automations."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Latest amount"
+    _attr_device_class = SensorDeviceClass.MONETARY
+
+    def __init__(self, entry_id: str, data: ReceiverData) -> None:
+        self.data = data
+        self._attr_unique_id = f"{entry_id}_latest_amount"
+        self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
+
+    async def async_added_to_hass(self) -> None:
+        """Update whenever a callback is accepted."""
+        self.async_on_remove(
+            self.data.add_listener(lambda _: self.async_write_ha_state())
+        )
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> Decimal | None:
+        """Return positive money in and negative money out."""
+        item = self.data.latest
+        return item.signed_amount if item else None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Use the transaction currency as the monetary unit."""
+        item = self.data.latest
+        return (item.currency or "GBP").upper() if item else "GBP"
+
+    @property
+    def icon(self) -> str:
+        """Match the numeric sensor icon to the transaction type."""
+        item = self.data.latest
+        if item and item.symbol == "🐷":
+            return "mdi:piggy-bank"
+        if item and (item.direction or "").upper() == "IN":
+            return "mdi:cash-plus"
+        return "mdi:cash-minus"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the useful automation fields without requiring raw JSON parsing."""
+        item = self.data.latest
+        if not item:
+            return {}
+        return {
+            key: value
+            for key, value in {
+                "direction": item.direction,
+                "transaction_type": item.transaction_type,
+                "source": item.source,
+                "source_sub_type": item.source_sub_type,
+                "status": item.status,
+                "counterparty_name": item.counterparty_name,
+                "spending_category": item.spending_category,
+                "reference": item.reference,
+                "transaction_time": item.transaction_time,
+            }.items()
+            if value is not None
+        }

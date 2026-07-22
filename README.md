@@ -10,12 +10,13 @@ This integration deliberately does not ask for a Starling access token. It recei
 
 ## What it creates
 
-- `sensor.starling_bank_feed` — a GBP dashboard summary such as `💳 • £12.34 • Card payment • Example shop`, with a matching Home Assistant icon. Its attributes keep the full unmodified Starling callback under `latest.raw_payload`, alongside the normalised fields used in automations.
-- `event.starling_bank_feed_item_received` — a Home Assistant event entity for the latest received webhook.
+- `sensor.starling_bank_feed_feed` — a dashboard summary such as `💳 • £12.34 • Card payment • Example shop`, with a matching Home Assistant icon. Round-ups are identified separately with a piggy-bank icon. Its attributes keep the full unmodified Starling callback under `latest.raw_payload`, alongside the normalised fields used in automations.
+- `sensor.starling_bank_feed_latest_amount` — the latest amount as a signed monetary value: money in is positive and money out is negative. Useful automation fields such as direction, transaction type, counterparty, category, and reference are direct attributes.
+- `event.starling_bank_feed` — a Home Assistant event entity for the latest received webhook.
 - `starling_bank_receiver.webhook_received` — Home Assistant event bus event for every accepted callback.
 - `starling_bank_receiver.feed_item_received` — emitted for `FEED_ITEM` callbacks.
 
-The integration keeps a small in-memory deduplication window keyed by Starling's `webhookEventUid`; it does not create its own permanent transaction store.
+The integration keeps the latest 250 callbacks in Home Assistant's private integration storage and deduplicates deliveries by Starling's `webhookEventUid`.
 
 ## Install
 
