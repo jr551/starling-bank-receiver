@@ -11,11 +11,16 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import get_url
 
+from .api import StarlingApiClient, StarlingDataUpdateCoordinator
 from .const import (
+    CONF_API_TOKEN,
+    CONF_SCAN_INTERVAL,
     CONF_WEBHOOK_SECRET,
     CONF_WEBHOOK_PUBLIC_KEY,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EVENT_FEED_ITEM_RECEIVED,
     EVENT_WEBHOOK_RECEIVED,
@@ -37,6 +42,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> 
         entry.options.get(CONF_WEBHOOK_PUBLIC_KEY),
     )
     await data.async_restore()
+    api_token = str(entry.options.get(CONF_API_TOKEN) or "").strip()
+    if api_token:
+        data.coordinator = StarlingDataUpdateCoordinator(
+            hass,
+            StarlingApiClient(async_get_clientsession(hass), api_token),
+            int(entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+        )
+        await data.coordinator.async_refresh()
     entry.runtime_data = data
     runtime = hass.data.setdefault(DOMAIN, {})
     runtime[entry.entry_id] = data
@@ -50,7 +63,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> 
         identifiers={(DOMAIN, entry.entry_id)},
         manufacturer="Starling Bank",
         name="Starling Bank feed",
-        model="Webhook receiver",
+        model="Webhook and read-only API receiver" if api_token else "Webhook receiver",
+        sw_version="0.3.0",
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

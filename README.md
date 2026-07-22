@@ -4,7 +4,7 @@
 
 Receive **Starling Bank personal API V2** webhooks directly in Home Assistant.
 
-This integration deliberately does not ask for a Starling access token. It receives webhook notifications only, creates Home Assistant entities, and fires automation events. Transaction details remain in your own Home Assistant instance.
+Receive signed webhook notifications and, optionally, use a personal access token to read account balances and spaces. The integration never performs a write request. Transaction and balance details remain in your own Home Assistant instance.
 
 ![Starling Bank Receiver icon](brand/logo.png)
 
@@ -12,6 +12,9 @@ This integration deliberately does not ask for a Starling access token. It recei
 
 - `sensor.starling_bank_feed_feed` — a dashboard summary such as `💳 • £12.34 • Card payment • Example shop`, with a matching Home Assistant icon. Round-ups are identified separately with a piggy-bank icon. Its attributes keep the full unmodified Starling callback under `latest.raw_payload`, alongside the normalised fields used in automations.
 - `sensor.starling_bank_feed_latest_amount` — the latest amount as a signed monetary value: money in is positive and money out is negative. Useful automation fields such as direction, transaction type, counterparty, category, and reference are direct attributes.
+- `sensor.starling_bank_feed_spaces_total` — the total held across all visible savings and spending spaces.
+- One monetary balance sensor for every visible account, using Starling's effective balance (including pending transactions).
+- One monetary sensor for every savings goal or spending space, including its owning account and current state.
 - `event.starling_bank_feed` — a Home Assistant event entity for the latest received webhook.
 - `starling_bank_receiver.webhook_received` — Home Assistant event bus event for every accepted callback.
 - `starling_bank_receiver.feed_item_received` — emitted for `FEED_ITEM` callbacks.
@@ -25,6 +28,7 @@ The integration keeps the latest 250 callbacks in Home Assistant's private integ
 3. Add **Starling Bank Receiver** from **Settings → Devices & services → Add integration**.
 4. Copy the **Payload URL** shown on `sensor.starling_bank_feed` and paste it into Starling Developer Portal's *Payload URL* field.
 5. In Starling, choose **Show public key** for that webhook. Open the integration's **Configure** menu in Home Assistant and paste the complete PEM key. The receiver verifies Starling's raw-payload `X-Hook-Signature` using SHA512withRSA and rejects unsigned callbacks.
+6. Optional: create a personal access token with `account-list:read`, `balance:read`, `savings-goal:read`, and `space:read`, then paste it into **Configure**. Balance entities refresh every five minutes by default and immediately after an accepted webhook.
 
 ## Data retention
 
@@ -55,7 +59,9 @@ automation:
 
 ## Privacy and security
 
-- No cloud account, token, analytics, or outbound network connection.
+- Webhook-only mode needs no account token or outbound API connection; read-only balance entities are strictly opt-in.
+- The optional personal access token is stored only in the Home Assistant config entry, is masked in the options form, and is never added to entity attributes or logs.
+- API support is deliberately read-only: the client contains only fixed `GET` calls for accounts, balances, savings goals, and spaces.
 - Webhook IDs, account IDs, references, and counterparties are runtime data only.
 - The callback route accepts only Starling's documented callback suffixes and validates the corresponding `webhookType`.
 - Replay deliveries are ignored using `webhookEventUid` during the current Home Assistant runtime.

@@ -12,15 +12,19 @@
   },
   "options": {
     "error": {
+      "cannot_connect": "Could not connect to Starling. Try again shortly.",
+      "invalid_auth": "Starling rejected the personal access token or a required read scope is missing.",
       "invalid_public_key": "The Starling webhook public key is not a valid PEM public key."
     },
     "step": {
       "init": {
         "data": {
-          "webhook_public_key": "Webhook public key"
+          "api_token": "Personal access token (blank keeps the existing token)",
+          "scan_interval": "Balance refresh interval",
+          "webhook_public_key": "Webhook public key (blank keeps the existing key)"
         },
-        "description": "In Starling Developer Portal, use Show public key for this webhook and paste the complete PEM key here. The integration will reject unsigned or invalid callbacks.",
-        "title": "Verify Starling webhooks"
+        "description": "Configure signed webhooks and optional read-only account data. The personal access token is stored only in Home Assistant and is used only for GET requests to account, balance, savings-goal, and space endpoints.",
+        "title": "Configure Starling Bank"
       }
     }
   }

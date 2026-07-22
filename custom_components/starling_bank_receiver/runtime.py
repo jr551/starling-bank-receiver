@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
+from .api import StarlingDataUpdateCoordinator
 from .const import DOMAIN
 from .models import FeedItem
 
@@ -35,6 +36,7 @@ class ReceiverData:
         self.public_key = (
             load_pem_public_key(public_key_pem.encode()) if public_key_pem else None
         )
+        self.coordinator: StarlingDataUpdateCoordinator | None = None
         self.latest: FeedItem | None = None
         self.total_received = 0
         self.total_duplicates = 0
@@ -102,6 +104,8 @@ class ReceiverData:
         for listener in tuple(self._listeners):
             listener(item)
         self.hass.async_create_task(self.async_save())
+        if self.coordinator:
+            self.hass.async_create_task(self.coordinator.async_request_refresh())
         return True
 
     def signature_is_valid(self, body: bytes, signature: str | None) -> bool:
