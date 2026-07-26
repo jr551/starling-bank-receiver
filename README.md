@@ -28,7 +28,14 @@ The integration keeps the latest 250 callbacks in Home Assistant's private integ
 3. Add **Starling Bank Receiver** from **Settings → Devices & services → Add integration**.
 4. Copy the **Payload URL** shown on `sensor.starling_bank_feed` and paste it into Starling Developer Portal's *Payload URL* field.
 5. In Starling, choose **Show public key** for that webhook. Open the integration's **Configure** menu in Home Assistant and paste the complete PEM key. The receiver verifies Starling's raw-payload `X-Hook-Signature` using SHA512withRSA and rejects unsigned callbacks.
-6. Optional: create a personal access token with `account-list:read`, `balance:read`, `savings-goal:read`, and `space:read`, then paste it into **Configure**. Balance entities refresh every five minutes by default and immediately after an accepted webhook.
+6. Optional: create a personal access token with `account-list:read`, `balance:read`, `savings-goal:read`, and `space:read`, then paste it into **Configure**. Balance entities refresh every 15 minutes by default.
+
+Starling limits personal access tokens to 1,000 requests per day. A refresh uses
+one account-list request plus two requests per visible account, so use a longer
+interval if you have many accounts. Webhooks update the transaction entities
+without forcing an extra balance refresh. If Starling returns HTTP 429, the
+integration respects `Retry-After` (or backs off for one hour when it is absent)
+and retains an already loaded balance snapshot while waiting.
 
 ## Data retention
 

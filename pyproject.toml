@@ -1,6 +1,6 @@
 [project]
 name = "starling-bank-receiver"
-version = "0.3.0"
+version = "0.3.1"
 description = "Home Assistant receiver for Starling Bank webhooks"
 requires-python = ">=3.13"
 

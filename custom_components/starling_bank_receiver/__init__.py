@@ -64,7 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> 
         manufacturer="Starling Bank",
         name="Starling Bank feed",
         model="Webhook and read-only API receiver" if api_token else "Webhook receiver",
-        sw_version="0.3.0",
+        sw_version="0.3.1",
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

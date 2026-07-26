@@ -64,7 +64,9 @@ class StarlingBankReceiverOptionsFlow(OptionsFlow):
                     load_pem_public_key(key.encode())
                 except ValueError:
                     self._errors["base"] = "invalid_public_key"
-            if not self._errors and token:
+            # An unchanged stored token is deliberately not revalidated. Otherwise a
+            # Starling 429 prevents users from increasing an over-eager poll interval.
+            if not self._errors and submitted_token:
                 client = StarlingApiClient(async_get_clientsession(self.hass), token)
                 try:
                     await client.async_validate()
