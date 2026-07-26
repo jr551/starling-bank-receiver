@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import logging
+import math
 from typing import Any
 
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
@@ -21,6 +23,7 @@ REQUIRED_READ_SCOPES = {
     "savings-goal:read",
     "space:read",
 }
+DEFAULT_RATE_LIMIT_RETRY = 3600
 
 
 class StarlingApiError(Exception):
@@ -29,6 +32,39 @@ class StarlingApiError(Exception):
 
 class StarlingAuthenticationError(StarlingApiError):
     """The token is invalid or lacks a required read scope."""
+
+
+class StarlingRateLimitError(StarlingApiError):
+    """Starling rejected a request because the token exceeded its rate limit."""
+
+    def __init__(self, retry_after: int | None) -> None:
+        self.retry_after = retry_after
+        detail = (
+            f"; retrying in {retry_after} seconds"
+            if retry_after is not None
+            else ""
+        )
+        super().__init__(f"Starling API rate limit reached{detail}")
+
+
+def _retry_after_seconds(value: str | None) -> int | None:
+    """Convert an HTTP Retry-After value to a positive delay in seconds."""
+    if not value:
+        return None
+    try:
+        return max(1, int(value))
+    except ValueError:
+        pass
+    try:
+        retry_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=timezone.utc)
+    return max(
+        1,
+        math.ceil((retry_at - datetime.now(timezone.utc)).total_seconds()),
+    )
 
 
 class StarlingApiClient:
@@ -54,9 +90,13 @@ class StarlingApiClient:
                     raise StarlingAuthenticationError(
                         "Starling rejected the API token or a required read scope"
                     )
+                if response.status == 429:
+                    raise StarlingRateLimitError(
+                        _retry_after_seconds(response.headers.get("Retry-After"))
+                    )
                 response.raise_for_status()
                 payload = await response.json()
-        except StarlingAuthenticationError:
+        except (StarlingAuthenticationError, StarlingRateLimitError):
             raise
         except ClientResponseError as err:
             raise StarlingApiError(f"Starling API returned HTTP {err.status}") from err
@@ -112,17 +152,34 @@ class StarlingDataUpdateCoordinator(DataUpdateCoordinator[BankSnapshot]):
     def __init__(
         self, hass: HomeAssistant, client: StarlingApiClient, scan_interval: int
     ) -> None:
+        self._normal_update_interval = timedelta(seconds=scan_interval)
         super().__init__(
             hass,
             logger=_LOGGER,
             name="Starling Bank balances",
-            update_interval=timedelta(seconds=scan_interval),
+            update_interval=self._normal_update_interval,
         )
         self.client = client
 
     async def _async_update_data(self) -> BankSnapshot:
         """Fetch a fresh read-only snapshot."""
         try:
-            return await self.client.async_fetch_snapshot()
+            snapshot = await self.client.async_fetch_snapshot()
+            self.update_interval = self._normal_update_interval
+            return snapshot
+        except StarlingRateLimitError as err:
+            retry_seconds = max(
+                err.retry_after or DEFAULT_RATE_LIMIT_RETRY,
+                int(self._normal_update_interval.total_seconds()),
+            )
+            self.update_interval = timedelta(seconds=retry_seconds)
+            if self.data is not None:
+                _LOGGER.warning(
+                    "Starling rate limit reached; retaining the last balance "
+                    "snapshot and retrying in %s seconds",
+                    retry_seconds,
+                )
+                return self.data
+            raise UpdateFailed(str(err)) from err
         except StarlingApiError as err:
             raise UpdateFailed(str(err)) from err

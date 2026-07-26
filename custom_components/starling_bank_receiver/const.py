@@ -9,8 +9,8 @@ CONF_API_TOKEN: Final = "api_token"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_WEBHOOK_SECRET: Final = "webhook_secret"
 CONF_WEBHOOK_PUBLIC_KEY: Final = "webhook_public_key"
-DEFAULT_SCAN_INTERVAL: Final = 300
-MIN_SCAN_INTERVAL: Final = 60
+DEFAULT_SCAN_INTERVAL: Final = 900
+MIN_SCAN_INTERVAL: Final = 300
 EVENT_WEBHOOK_RECEIVED: Final = f"{DOMAIN}.webhook_received"
 EVENT_FEED_ITEM_RECEIVED: Final = f"{DOMAIN}.feed_item_received"
 

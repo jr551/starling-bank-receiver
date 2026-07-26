@@ -104,8 +104,6 @@ class ReceiverData:
         for listener in tuple(self._listeners):
             listener(item)
         self.hass.async_create_task(self.async_save())
-        if self.coordinator:
-            self.hass.async_create_task(self.coordinator.async_request_refresh())
         return True
 
     def signature_is_valid(self, body: bytes, signature: str | None) -> bool:
