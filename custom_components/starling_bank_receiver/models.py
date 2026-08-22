@@ -46,6 +46,7 @@ class FeedItem:
     status: str | None
     counterparty_name: str | None
     counterparty_type: str | None
+    counterparty_sub_entity_name: str | None
     spending_category: str | None
     country: str | None
     transaction_time: str | None
@@ -157,8 +158,12 @@ class FeedItem:
     def summary(self) -> str:
         """Return the state shown in Home Assistant dashboards."""
         parts = [self.symbol, self.amount_display, self.transaction_type]
-        if self.counterparty_name:
-            parts.append(self.counterparty_name)
+        name = self.counterparty_name or self.counterparty_sub_entity_name
+        if self.counterparty_name and self.counterparty_sub_entity_name:
+            if self.counterparty_sub_entity_name.lower() != self.counterparty_name.lower():
+                name = f"{self.counterparty_name} ({self.counterparty_sub_entity_name})"
+        if name:
+            parts.append(name)
         return " • ".join(parts)
 
 
@@ -203,10 +208,13 @@ def parse_payload(payload: Mapping[str, Any]) -> FeedItem:
         source_currency=_text(source_amount.get("currency")),
         direction=_text(content.get("direction")),
         source=_text(content.get("source")),
-        source_sub_type=_text(content.get("sourceSubType")),
-        status=_text(content.get("status")),
         counterparty_name=_text(content.get("counterPartyName")),
         counterparty_type=_text(content.get("counterPartyType")),
+        counterparty_sub_entity_name=_text(
+            content.get("counterPartySubEntityName")
+        ),
+        source_sub_type=_text(content.get("sourceSubType")),
+        status=_text(content.get("status")),
         spending_category=_text(content.get("spendingCategory")),
         country=_text(content.get("country")),
         transaction_time=_text(content.get("transactionTime")),

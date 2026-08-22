@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 import base64
+import logging
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -19,6 +20,7 @@ from .models import FeedItem
 
 STORAGE_VERSION = 1
 MAX_STORED_ITEMS = 250
+_LOGGER = logging.getLogger(__name__)
 
 
 class ReceiverData:
@@ -69,14 +71,19 @@ class ReceiverData:
 
     async def async_save(self) -> None:
         """Persist complete raw callbacks and the useful derived fields."""
-        await self._store.async_save(
-            {
-                "total_received": self.total_received,
-                "total_duplicates": self.total_duplicates,
-                "total_rejected": self.total_rejected,
-                "items": [item.event_data() for item in self._items],
-            }
-        )
+        try:
+            await self._store.async_save(
+                {
+                    "total_received": self.total_received,
+                    "total_duplicates": self.total_duplicates,
+                    "total_rejected": self.total_rejected,
+                    "items": [item.event_data() for item in self._items],
+                }
+            )
+        except OSError:
+            _LOGGER.warning(
+                "Could not persist Starling callbacks to Home Assistant storage"
+            )
 
     def add_listener(self, listener: Callable[[FeedItem], None]) -> Callable[[], None]:
         """Register an entity update callback."""
@@ -102,7 +109,10 @@ class ReceiverData:
         self._items.append(item)
         self.total_received += 1
         for listener in tuple(self._listeners):
-            listener(item)
+            try:
+                listener(item)
+            except Exception:  # noqa: BLE001 - one bad entity must not drop a callback
+                _LOGGER.exception("Starling receiver entity update failed")
         self.hass.async_create_task(self.async_save())
         return True
 

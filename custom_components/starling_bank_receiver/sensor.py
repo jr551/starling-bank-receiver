@@ -5,7 +5,12 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.helpers import dt_util
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -25,11 +30,13 @@ async def async_setup_entry(
     entry: ConfigEntry[ReceiverData],
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Add the latest-feed sensor."""
+    """Add the latest-feed and daily summary sensors."""
     async_add_entities(
         [
             StarlingBankFeedSensor(hass, entry.entry_id, entry.runtime_data),
             StarlingBankAmountSensor(entry.entry_id, entry.runtime_data),
+            StarlingDailySpendSensor(entry.entry_id, entry.runtime_data, "out", -1),
+            StarlingDailySpendSensor(entry.entry_id, entry.runtime_data, "in", 1),
         ]
     )
     if entry.runtime_data.coordinator:
@@ -176,6 +183,89 @@ class StarlingBankAmountSensor(SensorEntity):
             if value is not None
         }
 
+
+
+class StarlingDailySpendSensor(SensorEntity):
+    """Roll up today's money in or money out from stored callbacks."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_suggested_display_precision = 2
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(
+        self, entry_id: str, data: ReceiverData, direction: str, sign: int
+    ) -> None:
+        self.data = data
+        self._direction = direction.upper()
+        self._sign = sign
+        self._attr_unique_id = f"{entry_id}_today_{direction}"
+        self._attr_device_info = {"identifiers": {(DOMAIN, entry_id)}}
+        self._attr_translation_key = f"today_{direction}"
+
+    @property
+    def _name(self) -> str:
+        return "Money in today" if self._direction == "IN" else "Spent today"
+
+    @property
+    def name(self) -> str | None:
+        """Return a friendly dashboard name."""
+        return self._name
+
+    async def async_added_to_hass(self) -> None:
+        """Update whenever a callback is accepted."""
+        self.async_on_remove(
+            self.data.add_listener(lambda _: self.async_write_ha_state())
+        )
+        self.async_write_ha_state()
+
+    def _today_items(self) -> list[FeedItem]:
+        """Return settled items received or transacted today (UK local time)."""
+        today = dt_util.start_of_local_day()
+        items = []
+        for item in reversed(self.data.items):
+            stamp = item.transaction_time or item.received_at or item.updated_at
+            parsed = dt_util.parse_datetime(stamp) if stamp else None
+            if parsed is None:
+                continue
+            if parsed < today:
+                break
+            if (item.direction or "").upper() == self._direction:
+                items.append(item)
+        return items
+
+    @property
+    def native_value(self) -> Decimal | None:
+        """Return the signed daily total for this direction."""
+        total = Decimal(0)
+        found = False
+        for item in self._today_items():
+            if item.amount is None:
+                continue
+            total += Decimal(item.amount) / Decimal(100)
+            found = True
+        return self._sign * total if found else Decimal(0)
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """Use GBP; Starling personal accounts default to it."""
+        return "GBP"
+
+    @property
+    def icon(self) -> str:
+        """Pick an icon matching the direction."""
+        return "mdi:cash-plus" if self._direction == "IN" else "mdi:cash-minus"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the transaction count and the biggest item of the day."""
+        items = self._today_items()
+        attributes: dict[str, Any] = {"transactions_today": len(items)}
+        valued = [i for i in items if i.amount is not None]
+        if valued:
+            biggest = max(valued, key=lambda i: abs(i.amount or 0))
+            attributes["largest_today"] = biggest.summary
+        return attributes
 
 class StarlingBankSensorManager:
     """Add account and space sensors discovered by the coordinator."""

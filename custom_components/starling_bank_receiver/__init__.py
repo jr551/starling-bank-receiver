@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from typing import Any
 
@@ -64,7 +65,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: StarlingConfigEntry) -> 
         manufacturer="Starling Bank",
         name="Starling Bank feed",
         model="Webhook and read-only API receiver" if api_token else "Webhook receiver",
-        sw_version="0.3.1",
+        sw_version="0.4.0",
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -111,7 +112,8 @@ class StarlingWebhookView(HomeAssistantView):
             (
                 candidate
                 for candidate in self.hass.data.get(DOMAIN, {}).values()
-                if isinstance(candidate, ReceiverData) and candidate.secret == secret
+                if isinstance(candidate, ReceiverData)
+                and compare_digest(candidate.secret, secret)
             ),
             None,
         )
@@ -132,6 +134,16 @@ class StarlingWebhookView(HomeAssistantView):
             return web.Response(status=204)
 
         event_data = item.event_data()
+        event_data.update(
+            {
+                "transaction_type": item.transaction_type,
+                "symbol": item.symbol,
+                "amount_display": item.amount_display,
+                "summary": item.summary,
+            }
+        )
+        if item.signed_amount is not None:
+            event_data["signed_amount"] = str(item.signed_amount)
         self.hass.bus.async_fire(EVENT_WEBHOOK_RECEIVED, event_data)
         if item.webhook_type == "FEED_ITEM":
             self.hass.bus.async_fire(EVENT_FEED_ITEM_RECEIVED, event_data)

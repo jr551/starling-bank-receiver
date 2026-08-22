@@ -40,6 +40,25 @@ class ParsePayloadTests(unittest.TestCase):
         self.assertEqual(item.raw_payload["content"]["amount"]["minorUnits"], 1234)
         self.assertEqual(item.signed_amount, _models.Decimal("-12.34"))
 
+    def test_sub_entity_name_enriches_summary(self) -> None:
+        item = parse_payload(
+            {
+                "webhookEventUid": "event-3",
+                "webhookType": "FEED_ITEM",
+                "content": {
+                    "amount": {"currency": "GBP", "minorUnits": 999},
+                    "direction": "OUT",
+                    "source": "MASTER_CARD",
+                    "counterPartyName": "Coffee Shop",
+                    "counterPartySubEntityName": "Main Account",
+                },
+            }
+        )
+        self.assertEqual(
+            item.summary,
+            "💳 • £9.99 • Card payment • Coffee Shop (Main Account)",
+        )
+
     def test_gbp_transfer_summary_has_a_type_and_symbol(self) -> None:
         item = parse_payload(
             {

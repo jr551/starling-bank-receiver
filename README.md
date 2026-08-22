@@ -12,12 +12,15 @@ Receive signed webhook notifications and, optionally, use a personal access toke
 
 - `sensor.starling_bank_feed_feed` — a dashboard summary such as `💳 • £12.34 • Card payment • Example shop`, with a matching Home Assistant icon. Round-ups are identified separately with a piggy-bank icon. Its attributes keep the full unmodified Starling callback under `latest.raw_payload`, alongside the normalised fields used in automations.
 - `sensor.starling_bank_feed_latest_amount` — the latest amount as a signed monetary value: money in is positive and money out is negative. Useful automation fields such as direction, transaction type, counterparty, category, and reference are direct attributes.
+- `sensor.starling_bank_feed_money_in_today` — a running total of everything received today, with transaction count and the largest payment as attributes.
+- `sensor.starling_bank_feed_spent_today` — a running total of today's outgoing payments, with transaction count and the largest payment as attributes.
 - `sensor.starling_bank_feed_spaces_total` — the total held across all visible savings and spending spaces.
 - One monetary balance sensor for every visible account, using Starling's effective balance (including pending transactions).
 - One monetary sensor for every savings goal or spending space, including its owning account and current state.
 - `event.starling_bank_feed` — a Home Assistant event entity for the latest received webhook.
-- `starling_bank_receiver.webhook_received` — Home Assistant event bus event for every accepted callback.
 - `starling_bank_receiver.feed_item_received` — emitted for `FEED_ITEM` callbacks.
+
+Both event bus events carry the normalised fields plus derived helpers — `transaction_type`, `symbol`, `amount_display`, `summary`, and `signed_amount` — so automations can react without parsing attributes.
 
 The integration keeps the latest 250 callbacks in Home Assistant's private integration storage and deduplicates deliveries by Starling's `webhookEventUid`.
 
