@@ -113,7 +113,7 @@ class StarlingWebhookView(HomeAssistantView):
                 candidate
                 for candidate in self.hass.data.get(DOMAIN, {}).values()
                 if isinstance(candidate, ReceiverData)
-                and compare_digest(candidate.secret, secret)
+                and hmac.compare_digest(candidate.secret, secret)
             ),
             None,
         )
